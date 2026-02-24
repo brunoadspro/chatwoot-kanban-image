@@ -1,21 +1,27 @@
-# Use EXATAMENTE a mesma versão do seu Chatwoot atual (pinada)
-# Ex.: chatwoot/chatwoot:v4.6.1
-ARG CHATWOOT_BASE_IMAGE=chatwoot/chatwoot:latest
-FROM ${CHATWOOT_BASE_IMAGE}
+FROM chatwoot/chatwoot:latest
 
-USER root
+# Set working directory
+WORKDIR /app
 
-# Ferramentas básicas (algumas imagens já têm parte disso)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl wget ca-certificates tar gzip bash sed grep coreutils \
-  && rm -rf /var/lib/apt/lists/*
+# Install additional dependencies if needed
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Scripts customizados
-COPY docker/with-kanban.sh /usr/local/bin/with-kanban.sh
-COPY docker/apply-kanban-module.sh /usr/local/bin/apply-kanban-module.sh
+# Copy Kanban module files into the image
+COPY docker/kanban-module /app/docker/kanban-module
+COPY docker/kanban-config.js /app/docker/kanban-config.js
+COPY docker/apply-kanban-module.sh /app/docker/apply-kanban-module.sh
+COPY docker/with-kanban.sh /app/docker/with-kanban.sh
 
-RUN chmod +x /usr/local/bin/with-kanban.sh /usr/local/bin/apply-kanban-module.sh
+# Make scripts executable
+RUN chmod +x /app/docker/apply-kanban-module.sh \
+    && chmod +x /app/docker/with-kanban.sh
 
-# Volta para usuário padrão da imagem (se a sua imagem usa outro usuário, ajuste)
-# Muitas imagens do Chatwoot usam root no runtime; se a sua usa `rails`, troque aqui.
-USER root
+# Apply Kanban module during build
+RUN bash /app/docker/apply-kanban-module.sh
+
+# Use the custom entrypoint script
+ENTRYPOINT ["/app/docker/with-kanban.sh"]
+CMD ["bundle", "exec", "rails", "server", "-p", "3000", "-b", "0.0.0.0"]
